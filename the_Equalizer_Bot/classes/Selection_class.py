@@ -1,17 +1,21 @@
 import pandas as pd
+from random import choice as random_choice
 
 
 class Selection:
     class ProposalSequence:
         def __init__(self, group: int, proposals: list) -> None:
-            self.group = group
-            self.queue = proposals
+            self.group: int = group
+            self.queue: list = proposals
 
         def add(self, proposal: str) -> None:
             self.queue.append(proposal)
 
-        def drop(self) -> None:
-            self.queue.pop(0)
+        def extract_first(self) -> str:
+            return self.queue.pop(0)
+
+        def is_empty(self) -> bool:
+            return len(self.queue) == 0
 
         def __str__(self) -> str:
             return "\n   ◦ ".join(map(lambda i: f"|[Очередь {self.group}]| " + i, self.queue))
@@ -31,15 +35,20 @@ class Selection:
     def __init__(self, storekeeper):
         self.storekeeper = storekeeper
         self.proposals_dict = {}
+        self.answer_string = ""
 
         self.refresh()
 
-    def refresh(self):
+    def refresh(self) -> int:
         self.proposals_dict = {}
 
         for index, proposal in self.storekeeper.proposals_df.iterrows():
             if proposal["Selection"] == self.storekeeper.current_selection:
                 self.dict_smart_add(proposal)
+
+        print(self.proposals_dict)
+
+        return 0
 
     def dict_smart_add(self, proposal: pd.Series) -> int:
         user: str = proposal["User"]
@@ -63,14 +72,19 @@ class Selection:
             # Если ProposalSequence с совпадающей группой не найдет
             self.proposals_dict[user].append(new_proposal)
 
-    def show_proposals(self) -> str:
-        return "\n".join(
+    def show_proposals(self) -> int:
+        self.answer_string = "\n".join(
             [f"🗣️ {user} предложил(а):\n   • "
              + "\n   • ".join([str(prop) for prop in self.proposals_dict[user]])
              + "\n"
              for user in self.proposals_dict.keys()
              ]
         )
+
+        if self.answer_string:
+            return 0
+        else:
+            return 200
 
     def add_proposals(self, user: str, group_index: int, proposals: list) -> int:
 
@@ -87,5 +101,51 @@ class Selection:
                                                    new_proposals_df],
                                                   ignore_index=True
                                                   )
+        self.refresh()
+
+        return 0
+
+    def choose(self) -> int:
+        if self.proposals_dict:
+            # Место ошибки IndexError: single positional indexer is out-of-bounds (скорее всего из-за отсутствия пользователей)
+            selected_user: pd.Series = self.storekeeper.users_df.iloc[0] # не забудь юзеров циклично сместить и проверить, а есть ли у него предложения!
+            selected_user_proposals_list: list = self.proposals_dict[selected_user]
+            selected_proposal = random_choice(selected_user_proposals_list)
+
+            if isinstance(selected_proposal, self.ProposalSequence):
+                self.answer_string: str = selected_proposal.extract_first()
+                group_index = selected_proposal.group
+
+                if selected_proposal.is_empty():
+                    selected_user_proposals_list.remove(selected_proposal)
+
+            else:
+                self.answer_string: str = selected_proposal
+                selected_user_proposals_list.remove(selected_proposal)
+                group_index = 0
+
+            self.storekeeper.proposals_df = self.storekeeper.proposals_df[
+                ~((self.storekeeper.proposals_df['Selection'] == self.storekeeper.current_selection)
+                  & (self.storekeeper.proposals_df['User'] == selected_user)
+                  & (self.storekeeper.proposals_df['Proposal'] == self.answer_string)
+                  & (self.storekeeper.proposals_df['Group'] == group_index))
+            ]
+
+            if not selected_user_proposals_list:
+                del self.proposals_dict[selected_user]
+
+            return 0
+
+        else:
+            return 404
+
+    def shuffle_users_order(self) -> int:
+        shuffled_users_df = self.storekeeper.users_df.sample(frac=1).reset_index(drop=True)
+        if shuffled_users_df.empty:
+            return 200
+
+        self.storekeeper.users_df = shuffled_users_df
+
+        self.answer_string = " -> ".join(self.storekeeper.users_df["User"].to_list())
 
         return 0

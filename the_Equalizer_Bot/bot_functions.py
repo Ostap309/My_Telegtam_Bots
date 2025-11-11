@@ -64,14 +64,17 @@ async def add_selection_command(update: Update, context: ContextTypes.DEFAULT_TY
     storekeeper = context.bot_data['storekeeper']
 
     storekeeper_code = storekeeper.add_selection(selection_name)
+
     if storekeeper_code == 409:
         await update.message.reply_text(f"Выборка «{selection_name}» уже существует.")
+
     elif storekeeper_code == 0:
         selection = context.bot_data['selection']
         selection.refresh()
         await update.message.reply_text(f"Выборка «{selection_name}» успешно добавлена!")
+
     else:
-        await update.message.reply_text("Упс, что-то пошло не так.")
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
 
     return storekeeper_code
 
@@ -83,17 +86,21 @@ async def get_all_selections_command(update: Update, context: ContextTypes.DEFAU
 
     storekeeper = context.bot_data['storekeeper']
 
-    storekeeper_answer = storekeeper.get_all_selections()
-    if storekeeper_answer:
+    storekeeper_code = storekeeper.get_all_selections()
+
+    if storekeeper_code == 0:
         output = "\n".join(map(
             lambda i: f"🔸 «{i}»" if i != storekeeper.current_selection else f"🔸 «{i}» ✅",
-            storekeeper_answer))
+            storekeeper.all_selections_list))
+        await update.message.reply_text(f"Вот список всех Выборок, которые можно использовать:\n{output}")
+
+    elif storekeeper_code == 200:
+        await update.message.reply_text(f"Ой, похоже эта Выборка пуста.")
+
     else:
-        output = "Ой, похоже здесь пусто"
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
 
-    await update.message.reply_text(f"Вот список всех Выборок, которые можно использовать:\n{output}")
-
-    return 0
+    return storekeeper_code
 
 
 # Команда отмены всех несохраненных действий
@@ -109,8 +116,9 @@ async def undo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if storekeeper_code == 0:
         selection.refresh()
         await update.message.reply_text("Все изменения текущей сессии отменены.")
+
     else:
-        await update.message.reply_text("Упс, что-то пошло не так.")
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
 
     return storekeeper_code
 
@@ -126,12 +134,14 @@ async def save_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     if storekeeper_code == 0:
         await update.message.reply_text("Все изменения текущей сессии сохранены.")
+
     elif storekeeper_code == 403:
         await update.message.reply_text(
             "Похоже моя база данных уже используется другим устройством, повторите попытку позже."
         )
+
     else:
-        await update.message.reply_text("Упс, что-то пошло не так.")
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
 
     return storekeeper_code
 
@@ -143,13 +153,18 @@ async def current_selection_command(update: Update, context: ContextTypes.DEFAUL
 
     storekeeper = context.bot_data['storekeeper']
 
-    storekeeper_answer = storekeeper.current_selection
-    if storekeeper_answer:
-        await update.message.reply_text(f"Текущая Выборка: «{storekeeper_answer}»")
-    else:
+    selection_code = storekeeper.get_current_selection_code()
+
+    if selection_code == 0:
+        await update.message.reply_text(f"Текущая Выборка: «{storekeeper.current_selection}»")
+
+    elif selection_code == 200:
         await update.message.reply_text("В данный момент Выборок нет, но вы всегда можете добавить новую")
 
-    return 0
+    else:
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
+
+    return selection_code
 
 
 # Команда перехода на другую Выборку (делает указанную Выборку текущей)
@@ -168,13 +183,15 @@ async def set_current_selection_command(update: Update, context: ContextTypes.DE
 
     if storekeeper_code == 404:
         await update.message.reply_text("Такой выборки не существует")
+
     elif storekeeper_code == 0:
         selection = context.bot_data['selection']
         selection.refresh()
 
         await update.message.reply_text(f"Успех! Текущая выборка: «{storekeeper.current_selection}»")
+
     else:
-        await update.message.reply_text("Упс, что-то пошло не так.")
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
 
     return storekeeper_code
 
@@ -185,16 +202,21 @@ async def get_all_proposals_command(update: Update, context: ContextTypes.DEFAUL
 
     selection = context.bot_data['selection']
 
-    output = selection.show_proposals()
+    selection_code = selection.show_proposals()
 
-    if output:
-        await update.message.reply_html(output)
-    else:
+    if selection_code == 0:
+        await update.message.reply_html(selection.answer_string)
+
+    elif selection_code == 200:
         await update.message.reply_text(
             "Похоже эта Выборка пустует:(\nНо вы можете стать первым, кто озвучит своё Предложение!"
         )
 
-    return 0
+    else:
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
+
+    return selection_code
+
 
 @debug_print_return_code
 async def add_proposals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -215,10 +237,44 @@ async def add_proposals_command(update: Update, context: ContextTypes.DEFAULT_TY
     selection = context.bot_data['selection']
 
     selection_code = selection.add_proposals(update.effective_user.mention_html(), group_number, proposals)
-    selection.refresh()
 
     if selection_code == 0:
         await update.message.reply_text(f"Ваши Предложения приняты!")
+
+    else:
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
+
+    return selection_code
+
+
+@debug_print_return_code
+async def shuffle_users_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    selection = context.bot_data['selection']
+
+    selection_code = selection.shuffle_users_order()
+
+    if selection_code == 0:
+        await update.message.reply_html(f"Текущий порядок:\n{selection.answer_string}")
+    elif selection_code == 200:
+        await update.message.reply_text("Мне некого перемешивать")
+    else:
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
+
+    return selection_code
+
+
+@debug_print_return_code
+async def choose_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    selection = context.bot_data['selection']
+
+    selection_code = selection.choose()
+
+    if selection_code == 0:
+        await update.message.reply_text(f"Выбираю: «{selection.answer_string}»")
+    elif selection_code == 404:
+        await update.message.reply_text("Похоже эта Выборка опустела.")
+    else:
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
 
     return selection_code
 

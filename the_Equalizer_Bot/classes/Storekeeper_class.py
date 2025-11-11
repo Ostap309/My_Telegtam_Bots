@@ -8,14 +8,20 @@ class Storekeeper:
         self.proposals_df = pd.read_excel(DATA_PATH, sheet_name="Proposals")
         self.users_df = pd.read_excel(DATA_PATH, sheet_name="Users")
 
+        self.all_selections_list = []
         self.current_selection = ""
+
         self.set_current_selection()
 
-    def get_all_selections(self) -> list:
-        return self.selection_df["Selection"].to_list()
+    def get_all_selections(self) -> int:
+        self.all_selections_list = self.selection_df["Selection"].to_list()
+        if self.all_selections_list:
+            return 0
+        else:
+            return 200
 
     def add_selection(self, selection_name: str) -> int:
-        if selection_name in self.get_all_selections():
+        if selection_name in self.all_selections_list:
             return 409
 
         new_selection_df = pd.DataFrame({
@@ -48,12 +54,18 @@ class Storekeeper:
         except PermissionError:
             return 403
 
+    def get_current_selection_code(self) -> int:
+        if self.current_selection:
+            return 0
+        else:
+            return 200
+
     def set_current_selection(self, selection_name: str = "") -> int:
-        all_selections = self.get_all_selections()
+        self.get_all_selections()
         current = self.selection_df[self.selection_df["Current"] == 1]
 
         if selection_name:
-            if selection_name in all_selections:
+            if selection_name in self.all_selections_list:
                 if not current.empty:
                     self.selection_df.loc[self.selection_df["Current"] == 1, "Current"] = 0
                 self.selection_df.loc[self.selection_df["Selection"] == selection_name, "Current"] = 1
@@ -62,13 +74,13 @@ class Storekeeper:
             else:
                 return 404
         else:
-            if all_selections:
+            if self.all_selections_list:
                 if not current.empty:
                     self.current_selection = current["Selection"].iloc[0]
                 else:
                     col_current_pos = self.selection_df.columns.get_loc("Current")
                     self.selection_df.iloc[0, col_current_pos] = 1
-                    self.current_selection = all_selections[0]
+                    self.current_selection = self.all_selections_list[0]
 
             else:
                 self.current_selection = ""

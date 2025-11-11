@@ -12,5 +12,7 @@ BOT_COMMANDS = [("start", bot_functions.start_command),
                 ("current", bot_functions.current_selection_command),
                 ("set_current", bot_functions.set_current_selection_command),
                 ("get_all_proposals", bot_functions.get_all_proposals_command),
-                ("add_proposals", bot_functions.add_proposals_command)
+                ("add_proposals", bot_functions.add_proposals_command),
+                ("shuffle_order", bot_functions.shuffle_users_order_command),
+                ("choose", bot_functions.choose_command)
                 ]
