@@ -86,3 +86,16 @@ class Storekeeper:
                 self.current_selection = ""
 
         return 0
+
+    def initialize_user(self, user: list) -> int:
+        if not (self.users_df["User"].isin([user])).any():
+            new_user_df = pd.DataFrame({
+                'User': user,
+            }, index=[0])
+
+            self.users_df = pd.concat([self.users_df, new_user_df], ignore_index=True)
+
+            return 0
+
+        else:
+            return 204

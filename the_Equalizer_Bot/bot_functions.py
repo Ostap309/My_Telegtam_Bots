@@ -1,11 +1,13 @@
 import functools
 
-from telegram import ForceReply, Update
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram import Update
+from telegram.ext import ContextTypes
 
+# Режим вывода кодов возврата в консоль
 DEBUG_MODE = True
 
 
+# Функция-декоратор вывода кодов возврата в консоль (при DEBUG_MODE = True)
 def debug_print_return_code(func):
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
@@ -95,7 +97,7 @@ async def get_all_selections_command(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text(f"Вот список всех Выборок, которые можно использовать:\n{output}")
 
     elif storekeeper_code == 200:
-        await update.message.reply_text(f"Ой, похоже эта Выборка пуста.")
+        await update.message.reply_text(f"Ой, похоже список Выборок пуст.")
 
     else:
         await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
@@ -196,6 +198,7 @@ async def set_current_selection_command(update: Update, context: ContextTypes.DE
     return storekeeper_code
 
 
+# Команда вывода всех Предложений в текущей Выборке
 @debug_print_return_code
 async def get_all_proposals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Формат /get_all_proposals
@@ -209,7 +212,7 @@ async def get_all_proposals_command(update: Update, context: ContextTypes.DEFAUL
 
     elif selection_code == 200:
         await update.message.reply_text(
-            "Похоже эта Выборка пустует:(\nНо вы можете стать первым, кто озвучит своё Предложение!"
+            "Похоже текущая Выборка пустует:(\nНо вы можете стать первым, кто озвучит своё Предложение!"
         )
 
     else:
@@ -218,9 +221,11 @@ async def get_all_proposals_command(update: Update, context: ContextTypes.DEFAUL
     return selection_code
 
 
+# Команда добавления Предложений в текущую Выборку
 @debug_print_return_code
 async def add_proposals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # Формат /add_proposals <group_number: int>; <proposal_1: str>; <proposal_2: str>; ...; <proposal_n: str>
+    # Формат /add_proposals
+    # <group_number: Integer>; <proposal_1: String>; <proposal_2: String>; ...; <proposal_n: String>
 
     args = update.message.text.split(" ")[1:]
     if not args:
@@ -236,6 +241,13 @@ async def add_proposals_command(update: Update, context: ContextTypes.DEFAULT_TY
     storekeeper = context.bot_data['storekeeper']
     selection = context.bot_data['selection']
 
+    storekeeper_code = storekeeper.get_current_selection_code()
+
+    if storekeeper_code == 200:
+        await update.message.reply_text(f"Мне некуда добавить ваше Предложение. Добавьте новую Выборку.")
+
+        return storekeeper_code
+
     selection_code = selection.add_proposals(update.effective_user.mention_html(), group_number, proposals)
 
     if selection_code == 0:
@@ -247,8 +259,11 @@ async def add_proposals_command(update: Update, context: ContextTypes.DEFAULT_TY
     return selection_code
 
 
+# Команда перемешивания очередности пользователей
 @debug_print_return_code
 async def shuffle_users_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Формат: /shuffle_order
+
     selection = context.bot_data['selection']
 
     selection_code = selection.shuffle_users_order()
@@ -262,9 +277,11 @@ async def shuffle_users_order_command(update: Update, context: ContextTypes.DEFA
 
     return selection_code
 
-
+# Команда извлечения Предложения следующего пользователя в очереди из Выборки
 @debug_print_return_code
 async def choose_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Формат /choose
+
     selection = context.bot_data['selection']
 
     selection_code = selection.choose()
@@ -272,12 +289,33 @@ async def choose_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if selection_code == 0:
         await update.message.reply_text(f"Выбираю: «{selection.answer_string}»")
     elif selection_code == 404:
-        await update.message.reply_text("Похоже эта Выборка опустела.")
+        await update.message.reply_text("Похоже текущая Выборка опустела.")
+    elif selection_code == 508:
+        await update.message.reply_text(
+            "Похоже в Выборке остались Предложения неопознанного мною пользователя. Пожалуйста, "
+            "обозначьте себя (введите /add_me)"
+        )
     else:
         await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
 
     return selection_code
 
-# async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-#     """Echo the user message."""
-#     await update.message.reply_text(update.message.text)
+# Команда инициализации нового пользователя
+@debug_print_return_code
+async def add_me_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Формат /add_me
+
+    storekeeper = context.bot_data['storekeeper']
+
+    storekeeper_code = storekeeper.initialize_user(update.effective_user.mention_html())
+
+    if storekeeper_code == 0:
+        await update.message.reply_html(f"Привет! Теперь я тебя запомнил, {update.effective_user.mention_html()}!")
+    elif storekeeper_code == 204:
+        await update.message.reply_html(
+            f"Я помню тебя, {update.effective_user.mention_html()}. Инициализация не требуется."
+        )
+    else:
+        await update.message.reply_text(f"Пу-пу-пу, что-то пошло не так, извините:/")
+
+    return storekeeper_code

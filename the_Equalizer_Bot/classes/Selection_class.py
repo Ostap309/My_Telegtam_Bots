@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from random import choice as random_choice
 
@@ -27,7 +28,7 @@ class Selection:
             return self
 
         def __eq__(self, other):
-            if self.group == other.group:
+            if isinstance(other, Selection.ProposalSequence) and self.group == other.group:
                 return True
 
             return False
@@ -45,8 +46,6 @@ class Selection:
         for index, proposal in self.storekeeper.proposals_df.iterrows():
             if proposal["Selection"] == self.storekeeper.current_selection:
                 self.dict_smart_add(proposal)
-
-        print(self.proposals_dict)
 
         return 0
 
@@ -106,9 +105,26 @@ class Selection:
         return 0
 
     def choose(self) -> int:
-        if self.proposals_dict:
-            # Место ошибки IndexError: single positional indexer is out-of-bounds (скорее всего из-за отсутствия пользователей)
-            selected_user: pd.Series = self.storekeeper.users_df.iloc[0] # не забудь юзеров циклично сместить и проверить, а есть ли у него предложения!
+        def shift_df_up(df: pd.DataFrame) -> pd.DataFrame:
+            shifted_df = pd.DataFrame(
+                np.roll(df.values, shift=-1, axis=0),
+                columns=df.columns,
+                index=df.index
+            )
+            return shifted_df
+
+        if self.proposals_dict and not self.storekeeper.users_df.empty:
+            selected_user: pd.Series = self.storekeeper.users_df.iloc[0]["User"]
+            iter_num = 0
+            while selected_user not in self.proposals_dict.keys():
+                if iter_num > 100:
+                    return 508
+                self.storekeeper.users_df = shift_df_up(self.storekeeper.users_df)
+
+                selected_user = self.storekeeper.users_df.iloc[0]["User"]
+
+                iter_num += 1
+
             selected_user_proposals_list: list = self.proposals_dict[selected_user]
             selected_proposal = random_choice(selected_user_proposals_list)
 
@@ -125,14 +141,16 @@ class Selection:
                 group_index = 0
 
             self.storekeeper.proposals_df = self.storekeeper.proposals_df[
-                ~((self.storekeeper.proposals_df['Selection'] == self.storekeeper.current_selection)
-                  & (self.storekeeper.proposals_df['User'] == selected_user)
-                  & (self.storekeeper.proposals_df['Proposal'] == self.answer_string)
-                  & (self.storekeeper.proposals_df['Group'] == group_index))
+                ~((self.storekeeper.proposals_df["Selection"] == self.storekeeper.current_selection)
+                  & (self.storekeeper.proposals_df["User"] == selected_user)
+                  & (self.storekeeper.proposals_df["Proposal"] == self.answer_string)
+                  & (self.storekeeper.proposals_df["Group"] == group_index))
             ]
 
             if not selected_user_proposals_list:
                 del self.proposals_dict[selected_user]
+
+            self.storekeeper.users_df = shift_df_up(self.storekeeper.users_df)
 
             return 0
 
