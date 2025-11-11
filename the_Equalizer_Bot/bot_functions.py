@@ -58,7 +58,7 @@ async def add_selection_command(update: Update, context: ContextTypes.DEFAULT_TY
 
     args = update.message.text.split()[1:]
     if not args:
-        await update.message.reply_text(f"Прошу, повторите команду, указав имя новой Выборки.")
+        await update.message.reply_text("Прошу, повторите команду, указав имя новой Выборки.")
         return 400
     selection_name = " ".join(args)
     storekeeper = context.bot_data['storekeeper']
@@ -67,37 +67,55 @@ async def add_selection_command(update: Update, context: ContextTypes.DEFAULT_TY
     if storekeeper_code == 409:
         await update.message.reply_text(f"Выборка «{selection_name}» уже существует.")
     elif storekeeper_code == 0:
+        selection = context.bot_data['selection']
+        selection.refresh()
         await update.message.reply_text(f"Выборка «{selection_name}» успешно добавлена!")
+    else:
+        await update.message.reply_text("Упс, что-то пошло не так.")
 
     return storekeeper_code
 
 
+# Команда вывода всех существующих Выборок
 @debug_print_return_code
 async def get_all_selections_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Формат /get_all_selections
 
     storekeeper = context.bot_data['storekeeper']
-    output = "\n".join(map(lambda i: f"🔸 «{i}»", storekeeper.get_all_selections()))
+
+    storekeeper_answer = storekeeper.get_all_selections()
+    if storekeeper_answer:
+        output = "\n".join(map(
+            lambda i: f"🔸 «{i}»" if i != storekeeper.current_selection else f"🔸 «{i}» ✅",
+            storekeeper_answer))
+    else:
+        output = "Ой, похоже здесь пусто"
 
     await update.message.reply_text(f"Вот список всех Выборок, которые можно использовать:\n{output}")
 
     return 0
 
 
+# Команда отмены всех несохраненных действий
 @debug_print_return_code
 async def undo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Формат /undo
 
     storekeeper = context.bot_data['storekeeper']
+    selection = context.bot_data['selection']
 
     storekeeper_code = storekeeper.undo()
 
     if storekeeper_code == 0:
-        await update.message.reply_text(f"Все изменения текущей сессии отменены.")
+        selection.refresh()
+        await update.message.reply_text("Все изменения текущей сессии отменены.")
+    else:
+        await update.message.reply_text("Упс, что-то пошло не так.")
 
     return storekeeper_code
 
 
+# Команда сохранения всех примененных действий в файл data.xlsx
 @debug_print_return_code
 async def save_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Формат /save
@@ -107,9 +125,102 @@ async def save_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     storekeeper_code = storekeeper.save()
 
     if storekeeper_code == 0:
-        await update.message.reply_text(f"Все изменения текущей сессии сохранены.")
+        await update.message.reply_text("Все изменения текущей сессии сохранены.")
+    elif storekeeper_code == 403:
+        await update.message.reply_text(
+            "Похоже моя база данных уже используется другим устройством, повторите попытку позже."
+        )
+    else:
+        await update.message.reply_text("Упс, что-то пошло не так.")
 
     return storekeeper_code
+
+
+# Команда вывода текущей Выборки
+@debug_print_return_code
+async def current_selection_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Формат /current
+
+    storekeeper = context.bot_data['storekeeper']
+
+    storekeeper_answer = storekeeper.current_selection
+    if storekeeper_answer:
+        await update.message.reply_text(f"Текущая Выборка: «{storekeeper_answer}»")
+    else:
+        await update.message.reply_text("В данный момент Выборок нет, но вы всегда можете добавить новую")
+
+    return 0
+
+
+# Команда перехода на другую Выборку (делает указанную Выборку текущей)
+@debug_print_return_code
+async def set_current_selection_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Формат /set_current <selection_name: String>
+
+    args = update.message.text.split()[1:]
+    if not args:
+        await update.message.reply_text("Прошу, повторите команду, указав имя Выборки.")
+        return 400
+    selection_name = " ".join(args)
+    storekeeper = context.bot_data['storekeeper']
+
+    storekeeper_code = storekeeper.set_current_selection(selection_name)
+
+    if storekeeper_code == 404:
+        await update.message.reply_text("Такой выборки не существует")
+    elif storekeeper_code == 0:
+        selection = context.bot_data['selection']
+        selection.refresh()
+
+        await update.message.reply_text(f"Успех! Текущая выборка: «{storekeeper.current_selection}»")
+    else:
+        await update.message.reply_text("Упс, что-то пошло не так.")
+
+    return storekeeper_code
+
+
+@debug_print_return_code
+async def get_all_proposals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Формат /get_all_proposals
+
+    selection = context.bot_data['selection']
+
+    output = selection.show_proposals()
+
+    if output:
+        await update.message.reply_html(output)
+    else:
+        await update.message.reply_text(
+            "Похоже эта Выборка пустует:(\nНо вы можете стать первым, кто озвучит своё Предложение!"
+        )
+
+    return 0
+
+@debug_print_return_code
+async def add_proposals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Формат /add_proposals <group_number: int>; <proposal_1: str>; <proposal_2: str>; ...; <proposal_n: str>
+
+    args = update.message.text.split(" ")[1:]
+    if not args:
+        await update.message.reply_text(
+            "Прошу, повторите команду, указав номер очереди (0 - без очереди),а затем свои Предложения."
+        )
+        return 400
+    args_str = " ".join(args).split(";")
+
+    group_number = int(args_str[0])
+    proposals = list(map(lambda i: i.strip(), args_str[1:]))
+
+    storekeeper = context.bot_data['storekeeper']
+    selection = context.bot_data['selection']
+
+    selection_code = selection.add_proposals(update.effective_user.mention_html(), group_number, proposals)
+    selection.refresh()
+
+    if selection_code == 0:
+        await update.message.reply_text(f"Ваши Предложения приняты!")
+
+    return selection_code
 
 # async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 #     """Echo the user message."""

@@ -5,6 +5,7 @@ import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from classes.Storekeeper_class import Storekeeper
+from classes.Selection_class import Selection
 
 # Настройка логирования
 logging.basicConfig(
@@ -19,8 +20,10 @@ def main() -> None:
     # Создайте приложение и передайте ему токен вашего бота.
     application = Application.builder().token(BOT_TOKEN).build()
     storekeeper = Storekeeper()
+    selection = Selection(storekeeper)
 
     application.bot_data['storekeeper'] = storekeeper
+    application.bot_data['selection'] = selection
 
     for command in BOT_COMMANDS:
         # command[0] - Имя команды, command[1] - Имя функции, реализующей команду
